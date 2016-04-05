@@ -3,10 +3,12 @@ import logging
 import requests
 from lxml import etree
 from lxml.etree import Element
-from typing import Optional, Mapping, Tuple
+from typing import Optional, Mapping, Tuple, Any
 
 from nexpose.models.failure import Failure
 from nexpose.networkerror import NetworkError
+
+_Element = Any  # unable to retrieve real type from lxml
 
 
 class NexposeBase:
@@ -21,7 +23,7 @@ class NexposeBase:
 
         logging.captureWarnings(True)
 
-    def _post(self, xml: Element, api_version: Tuple[int, int] = (1, 1)) -> Element:
+    def _post(self, xml: _Element, api_version: Tuple[int, int] = (1, 1)) -> _Element:
         url = 'https://{host}:{port}/api/{api_version}/xml'.format(
             host=self.host,
             port=self.port,
@@ -60,7 +62,7 @@ class NexposeBase:
         return self.__session
 
     @staticmethod
-    def __check_failure(xml: Element, api_version: Tuple[int, int]) -> None:
+    def __check_failure(xml: _Element, api_version: Tuple[int, int]) -> None:
         if api_version == (1, 1):
             if xml.attrib.get('success', None) == '1':
                 return
