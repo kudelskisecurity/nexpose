@@ -1,0 +1,9 @@
+# IDE
+.idea
+.todo
+
+# vim
+*.sw?
+
+# python
+*.pyc
