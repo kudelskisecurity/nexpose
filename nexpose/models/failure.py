@@ -33,7 +33,7 @@ class Exception(Object):
 
 
 class Failure(Object):
-    def __init__(self, messages: Iterable[Message], exceptions: Iterable[Exception]):
+    def __init__(self, messages: Iterable[Message], exceptions: Iterable[Exception]) -> None:
         self.messages = messages
         self.exceptions = exceptions
 

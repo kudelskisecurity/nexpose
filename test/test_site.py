@@ -1,6 +1,7 @@
 import unittest
 
-from nexpose import Site, Hosts, ScanConfig
+from nexpose.models import Site, ScanConfig
+from nexpose.models.site import Hosts, ScanConfig, Site
 from test import TestBaseLogged, TestBase
 
 
@@ -10,7 +11,7 @@ class TestSite(TestBaseLogged):
         scan_config = ScanConfig(template_id='full-audit')
         site = Site(site_id=-1, name='test name', hosts=hosts, scan_config=scan_config)
 
-        self.nexpose.site_save(site=site)
+        self.nexpose.site.save(site=site)
 
     def test_site_save(self):
         hosts = Hosts(ip_range=[
@@ -26,6 +27,6 @@ class TestSite(TestBaseLogged):
         scan_config = ScanConfig(template_id='full-audit')
         site = Site(site_id=-1, name='test name', hosts=hosts, scan_config=scan_config)
 
-        self.nexpose.site_save(site=site)
+        self.nexpose.site.save(site=site)
 
 

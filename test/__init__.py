@@ -38,7 +38,7 @@ class TestBaseLogged(TestBase):
         super().setUp()
 
         sessions_id = {
-            k: self.nexpose.login(
+            k: self.nexpose.session.login(
                 user_id=os.environ['NEXPOSE_USER'],
                 password=os.environ['NEXPOSE_PASS'],
                 api_version=k,
@@ -48,7 +48,7 @@ class TestBaseLogged(TestBase):
 
         self.nexpose = Nexpose(**kwargs)
 
-    def tearDown(self):
+    def _tearDown(self):
         super().tearDown()
         for api_version in [(1, 1), (1, 2)]:
-            self.nexpose.logout(api_version=api_version)
+            self.nexpose.session.logout(api_version=api_version)
