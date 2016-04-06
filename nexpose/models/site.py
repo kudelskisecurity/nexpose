@@ -1,23 +1,15 @@
 from lxml.etree import SubElement
 from typing import Iterable, Tuple, Optional
 
-from nexpose.models import XmlObject, IP
+from nexpose.models import XmlFormat
+from nexpose.models.scan import ScanConfig
+from nexpose.types import IP, Element
 
 
-class Hosts(XmlObject):
+class Hosts(XmlFormat):
     def __init__(self, ip_range: Iterable[Tuple[IP, Optional[IP]]], hosts: Iterable[str]) -> None:
-        super().__init__()
-
-        for host in hosts:
-            elem = SubElement(self.root, 'host')
-            elem.text = host
-
-        for ip_range_elem in ip_range:
-            attribs = {
-                'from': Hosts.__ip_to_str(ip=ip_range_elem[0]),
-                'to': Hosts.__ip_to_str(ip=ip_range_elem[1]),
-            }
-            SubElement(self.root, 'host', attrib={k: v for k, v in attribs.items() if v is not None})
+        self.ip_range = ip_range
+        self.hosts = hosts
 
     @staticmethod
     def __ip_to_str(ip: IP) -> Optional[str]:
@@ -25,22 +17,42 @@ class Hosts(XmlObject):
             return None
         return '.'.join(str(i) for i in ip)
 
+    def _to_xml(self, root: Element) -> None:
+        super()._to_xml(root)
 
-class ScanConfig(XmlObject):
-    def __init__(self, template_id: str) -> None:
-        super().__init__(
-            templateID=template_id,
-        )
+        for host in self.hosts:
+            elem = SubElement(root, 'host')
+            elem.text = host
+
+        for ip_range_elem in self.ip_range:
+            attribs = {
+                'from': Hosts.__ip_to_str(ip=ip_range_elem[0]),
+                'to': Hosts.__ip_to_str(ip=ip_range_elem[1]),
+            }
+            SubElement(root, 'host', attrib={k: v for k, v in attribs.items() if v is not None})
 
 
-class Site(XmlObject):
-    def __init__(self, site_id: int, name: str, hosts: Hosts, scan_config: ScanConfig) -> None:
-        super().__init__(
-            id=str(site_id),
-            name=name,
-        )
-        self.root.append(hosts.root)
-        SubElement(self.root, 'Credentials')
-        SubElement(self.root, 'Alerting')
-        self.root.append(scan_config.root)
-        SubElement(self.root, 'Tags')
+class Site(XmlFormat):
+    """
+    lies:
+     - `id` has to be a number
+    """
+    def __init__(self, name: str, hosts: Hosts, scan_config: ScanConfig, site_id: int = -1) -> None:
+        self.id = site_id
+        self.name = name
+        self.hosts = hosts
+        self.scan_config = scan_config
+
+    def _to_xml(self, root: Element) -> None:
+        super()._to_xml(root)
+
+        root.attrib.update(dict(
+            id=str(self.id),
+            name=self.name,
+        ))
+
+        root.append(self.hosts.to_xml())
+        SubElement(root, 'Credentials')
+        SubElement(root, 'Alerting')
+        root.append(self.scan_config.to_xml())
+        SubElement(root, 'Tags')

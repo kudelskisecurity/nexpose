@@ -1,10 +1,10 @@
 from lxml.etree import Element
 from typing import Tuple
 
-from nexpose.base import NexposeBase
+from nexpose.modules import ModuleBase
 
 
-class Session(NexposeBase):
+class Session(ModuleBase):
     def login(self, user_id: str, password: str, api_version: Tuple[int, int] = (1, 1)) -> str:
         request = Element('LoginRequest', attrib={
             'user-id': user_id,

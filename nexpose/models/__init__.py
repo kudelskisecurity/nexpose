@@ -1,10 +1,10 @@
 import types
+from abc import ABCMeta, abstractmethod
 
 from lxml import etree
-from lxml.etree import Element
-from typing import Iterable, Tuple, Any, cast
+from typing import Iterable, Any, cast, TypeVar, Generic
 
-IP = Tuple[int, int, int, int]
+from nexpose.types import Element
 
 
 class Object:
@@ -36,21 +36,40 @@ class Object:
         return ret.format(**values)
 
 
-class XmlObject:
-    def __init__(self, **kwargs) -> None:
-        root = Element(self.__class__.__name__)
-        root.attrib.update(kwargs)
+SubClass = TypeVar('SubClass')
 
-        self.root = root
+
+class XmlParse(Object, Generic[SubClass], metaclass=ABCMeta):
+    @staticmethod
+    @abstractmethod
+    def _from_xml(xml: Element) -> SubClass:
+        pass
+
+    @classmethod
+    def from_xml(cls, xml: Element) -> SubClass:
+        ret = cls._from_xml(xml)  # type: SubClass
+
+        # TODO check for xml emptyness
+
+        return ret
+
+
+class XmlFormat(Object, metaclass=ABCMeta):
+    @abstractmethod
+    def _to_xml(self, root: Element) -> None:
+        pass
+
+    def to_xml(self) -> Element:
+        root = etree.Element(self.__class__.__name__)
+
+        self._to_xml(root)
+
+        return root
 
     def __bytes__(self) -> bytes:
         return etree.tostring(
-            self.root,
+            self.to_xml(),
             xml_declaration=True,
             pretty_print=True,
             encoding='UTF-8'
         )
-
-
-class XmlCommunication:
-    pass

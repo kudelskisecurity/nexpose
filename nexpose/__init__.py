@@ -1,11 +1,11 @@
 from typing import Optional, Tuple, Mapping, no_type_check
 
-from nexpose.session import Session
-from nexpose.site import Site
+from nexpose.modules.scan import Scan
+from nexpose.modules.session import Session
+from nexpose.modules.site import Site
 
 
 class Nexpose:
-
     # mypy dislike kwargs
     @no_type_check
     def __init__(self, host: str, port: int = 3780,
@@ -14,3 +14,4 @@ class Nexpose:
 
         self.session = Session(**kwargs)
         self.site = Site(**kwargs)
+        self.scan = Scan(**kwargs)

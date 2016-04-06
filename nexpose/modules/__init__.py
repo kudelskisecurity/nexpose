@@ -2,16 +2,14 @@ import logging
 
 import requests
 from lxml import etree
-from lxml.etree import Element
-from typing import Optional, Mapping, Tuple, Any
+from typing import Optional, Mapping, Tuple
 
 from nexpose.models.failure import Failure
 from nexpose.networkerror import NetworkError
+from nexpose.types import Element
 
-_Element = Any  # unable to retrieve real type from lxml
 
-
-class NexposeBase:
+class ModuleBase:
     def __init__(self, host: str, port: int = 3780,
                  sessions_id: Optional[Mapping[Tuple[int, int], str]] = None) -> None:
         self.host = host
@@ -23,7 +21,7 @@ class NexposeBase:
 
         logging.captureWarnings(True)
 
-    def _post(self, xml: _Element, api_version: Tuple[int, int] = (1, 1)) -> _Element:
+    def _post(self, xml: Element, api_version: Tuple[int, int] = (1, 1)) -> Element:
         url = 'https://{host}:{port}/api/{api_version}/xml'.format(
             host=self.host,
             port=self.port,
@@ -48,21 +46,22 @@ class NexposeBase:
 
         return ans_xml
 
-    def __get_session(self):
-        if '__session' not in self.__dict__:
-            self.__session = None
+    @staticmethod
+    def __get_session():
+        if '_{}__session'.format(ModuleBase.__name__) not in ModuleBase.__dict__:
+            ModuleBase.__session = None
 
-        if not self.__session:
+        if ModuleBase.__session is None:
             session = requests.Session()
             session.headers['Content-Type'] = 'text/xml'
-            self.__session = session
+            ModuleBase.__session = session
         else:
-            self.__session.cookies.clear()  # nexpose dislike having login cookies and login for other thing
+            ModuleBase.__session.cookies.clear()  # nexpose dislike having login cookies and login for other thing
 
-        return self.__session
+        return ModuleBase.__session
 
     @staticmethod
-    def __check_failure(xml: _Element, api_version: Tuple[int, int]) -> None:
+    def __check_failure(xml: Element, api_version: Tuple[int, int]) -> None:
         if api_version == (1, 1):
             if xml.attrib.get('success', None) == '1':
                 return

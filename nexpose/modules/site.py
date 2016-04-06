@@ -1,13 +1,13 @@
 from lxml.etree import Element
 
-from nexpose.base import NexposeBase
+from nexpose.modules import ModuleBase
 from nexpose.models.site import Site as SiteModel
 
 
-class Site(NexposeBase):
+class Site(ModuleBase):
     def save(self, site: SiteModel) -> str:
         request = Element('SiteSaveRequest')
-        request.append(site.root)
+        request.append(site.to_xml())
 
         ans = self._post(xml=request)
 
