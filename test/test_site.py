@@ -15,8 +15,8 @@ class TestSite(TestBaseLogged):
         scan_config = ScanConfig(template=template)
         site = Site(name='test name', hosts=hosts, scan_config=scan_config)
 
-        site_id = self.nexpose.site.save(site=site)
-        self.nexpose.site.delete(site_id)
+        site_id = self.nexpose.site.site_save(site=site)
+        self.nexpose.site.site_delete(site_id)
 
     def test_site_save(self):
         template = self.__get_template()
@@ -34,8 +34,8 @@ class TestSite(TestBaseLogged):
         scan_config = ScanConfig(template=template)
         site = Site(name='test name', hosts=hosts, scan_config=scan_config)
 
-        site_id = self.nexpose.site.save(site=site)
-        self.nexpose.site.delete(site_id)
+        site_id = self.nexpose.site.site_save(site=site)
+        self.nexpose.site.site_delete(site_id)
 
 
 

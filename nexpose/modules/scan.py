@@ -1,5 +1,8 @@
+from lxml.etree import Element
 from typing import Iterable
 
+from nexpose.models.site import Site
+from nexpose.models.scan import Scan as ScanModel
 from nexpose.models.scan import Template
 from nexpose.modules import ModuleBase
 
@@ -26,3 +29,12 @@ class Scan(ModuleBase):
             Template(template_id='sox-audit'),
             Template(template_id='web-audit'),
         }
+
+    def site_scan(self, site: Site) -> ScanModel:
+        request = Element('SiteScanRequest', attrib={
+            'site-id': str(site.id),
+        })
+
+        ans = self._post(xml=request)
+
+        return ScanModel(scan_id=int(ans.attrib['scan-id']))

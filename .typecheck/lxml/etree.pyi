@@ -64,7 +64,7 @@ class _Attrib(Generic[K, V]):
 
 
 class _Element:
-    attrib = ...  # type: MutableMapping[str, _Attrib]
+    attrib = ...  # type: Union[_Attrib[str, str], _Attrib[bytes, bytes]]
     tag = ...  # type: str
     text = ...  # type: str
 

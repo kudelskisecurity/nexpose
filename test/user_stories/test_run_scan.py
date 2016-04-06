@@ -13,5 +13,6 @@ class TestRunScan(TestBaseLogged):
             scan_config=ScanConfig(template=template)
         )
 
-        site_saved = self.nexpose.site.save(site=site)
-        self.nexpose.site.delete(site=site_saved)
+        site_saved = self.nexpose.site.site_save(site=site)
+
+        self.nexpose.site.site_delete(site=site_saved)

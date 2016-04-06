@@ -7,7 +7,7 @@ from nexpose.modules import ModuleBase
 
 
 class Site(ModuleBase):
-    def save(self, site: SiteModel) -> SiteModel:
+    def site_save(self, site: SiteModel) -> SiteModel:
         request = Element('SiteSaveRequest')
         request.append(site.to_xml())
 
@@ -19,7 +19,7 @@ class Site(ModuleBase):
 
         return ret_site
 
-    def delete(self, site: SiteModel) -> None:
+    def site_delete(self, site: SiteModel) -> None:
         request = Element('SiteDeleteRequest', attrib={
             'site-id': str(site.id),
         })
