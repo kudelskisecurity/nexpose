@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 import requests
 from lxml import etree
@@ -14,10 +15,10 @@ class ModuleBase:
                  sessions_id: Optional[Mapping[Tuple[int, int], str]] = None) -> None:
         self.host = host
         self.port = port
-        self.sessions_id = sessions_id or {
-            (1, 1): None,
-            (1, 2): None,
-        }
+
+        self.sessions_id = defaultdict(default_factory=lambda: None)
+        if sessions_id is not None:
+            self.sessions_id.update(sessions_id)
 
         logging.captureWarnings(True)
 
