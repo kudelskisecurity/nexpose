@@ -5,7 +5,7 @@ from nexpose.modules import ModuleBase
 
 
 class Scan(ModuleBase):
-    def templates(self) -> Iterable[str]:
+    def templates(self) -> Iterable[Template]:
         # TODO waiting on API 2 to be released
         return {
             Template(template_id='aggressive-discovery'),
