@@ -20,4 +20,4 @@ class ScanConfig(XmlFormat):
 
 class Scan(Object):
     def __init__(self, scan_id: int) -> None:
-        self.scan_id = scan_id
+        self.id = scan_id

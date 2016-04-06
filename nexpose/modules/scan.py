@@ -1,10 +1,23 @@
+from enum import Enum
+
 from lxml.etree import Element
 from typing import Iterable
 
-from nexpose.models.site import Site
 from nexpose.models.scan import Scan as ScanModel
 from nexpose.models.scan import Template
+from nexpose.models.site import Site
 from nexpose.modules import ModuleBase
+
+
+class ScanStatus(Enum):
+    running = 'running'
+    finished = 'finished'
+    stopped = 'stopped'
+    error = 'error'
+    dispatched = 'dispatched'
+    paused = 'paused'
+    aborted = 'aborted'
+    unknown = 'unknown'
 
 
 class Scan(ModuleBase):
@@ -38,3 +51,12 @@ class Scan(ModuleBase):
         ans = self._post(xml=request)
 
         return ScanModel(scan_id=int(ans.attrib['scan-id']))
+
+    def scan_status(self, scan: ScanModel) -> ScanStatus:
+        request = Element('SiteStatusRequest', attrib={
+            'scan-id': str(scan.id),
+        })
+
+        ans = self._post(xml=request)
+
+        return ScanStatus(ans.attrib['status'])
