@@ -3,6 +3,7 @@ from collections import defaultdict
 
 import requests
 from lxml import etree
+from typing import MutableMapping
 from typing import Optional, Mapping, Tuple
 
 from nexpose.models.failure import Failure
@@ -16,7 +17,8 @@ class ModuleBase:
         self.host = host
         self.port = port
 
-        self.sessions_id = defaultdict(default_factory=lambda: None)
+        self.sessions_id = defaultdict(
+            default_factory=lambda: None)  # type: MutableMapping[Tuple[int, int], Optional[str]]
         if sessions_id is not None:
             self.sessions_id.update(sessions_id)
 
@@ -47,11 +49,10 @@ class ModuleBase:
 
         return ans_xml
 
-    @staticmethod
-    def __get_session():
-        if '_{}__session'.format(ModuleBase.__name__) not in ModuleBase.__dict__:
-            ModuleBase.__session = None
+    __session = None
 
+    @staticmethod
+    def __get_session() -> requests.Session:
         if ModuleBase.__session is None:
             session = requests.Session()
             session.headers['Content-Type'] = 'text/xml'

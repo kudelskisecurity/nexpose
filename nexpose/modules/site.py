@@ -21,7 +21,7 @@ class Site(ModuleBase):
 
     def delete(self, site: SiteModel) -> None:
         request = Element('SiteDeleteRequest', attrib={
-            'site-id': site.id,
+            'site-id': str(site.id),
         })
 
         self._post(xml=request)

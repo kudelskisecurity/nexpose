@@ -50,17 +50,17 @@ class _Attrib(Generic[K, V]):
 
     def __contains__(self, key: K) -> bool: ...
 
-    def __eq__(self, other) -> bool: ...
+    def __eq__(self, other: Any) -> bool: ...
 
-    def __ge__(self, other) -> bool: ...
+    def __ge__(self, other: Any) -> bool: ...
 
-    def __gt__(self, other) -> bool: ...
+    def __gt__(self, other: Any) -> bool: ...
 
-    def __le__(self, other) -> bool: ...
+    def __le__(self, other: Any) -> bool: ...
 
-    def __lt__(self, other) -> bool: ...
+    def __lt__(self, other: Any) -> bool: ...
 
-    def __ne__(self, other) -> bool: ...
+    def __ne__(self, other: Any) -> bool: ...
 
 
 class _Element:
@@ -70,9 +70,6 @@ class _Element:
 
     def append(self, element: '_Element') -> None: ...
 
-# TODO maybe put it in lxml.parser
-class _BaseParser:
-    pass
 
 AnyStr = Union[str, bytes]
 ListAnyStr = Union[List[str], List[bytes]]
@@ -80,16 +77,9 @@ DictAnyStr = Union[Dict[str, str], Dict[bytes, bytes]]
 Dict_Tuple2AnyStr_Any = Union[Dict[Tuple[str, str], Any], Tuple[bytes, bytes], Any]
 
 
-
-def tostring(element_or_tree, *, encoding: Optional[str] = ..., method: str = ...,
-             xml_declaration: Optional[bool] = ..., pretty_print: bool = ..., with_tail: bool = ...,
-             standalone: Optional[int] = ..., doctype: Optional[str] = ..., exclusive: bool = ...,
-             with_comments: bool = ..., inclusive_ns_prefixes: ListAnyStr = ...) -> Optional[bytes]: ...
-
-
-
-def fromstring(text, parser: Optional[_BaseParser]=..., *, base_url: Optional[AnyStr]=...) -> _Element: ...
-
+# TODO maybe put it in lxml.parser
+class _BaseParser:
+    pass
 
 
 class _ElementTree:
@@ -106,6 +96,15 @@ class _ElementTree:
               with_comments: bool = ...,
               inclusive_ns_prefixes: ListAnyStr = ...) -> None:
         pass
+
+
+def tostring(element_or_tree: Union[_Element, _ElementTree], *, encoding: Optional[str] = ..., method: str = ...,
+             xml_declaration: Optional[bool] = ..., pretty_print: bool = ..., with_tail: bool = ...,
+             standalone: Optional[int] = ..., doctype: Optional[str] = ..., exclusive: bool = ...,
+             with_comments: bool = ..., inclusive_ns_prefixes: ListAnyStr = ...) -> Optional[bytes]: ...
+
+
+def fromstring(text: AnyStr, parser: Optional[_BaseParser] = ..., *, base_url: Optional[AnyStr] = ...) -> _Element: ...
 
 
 class _XSLTResultTree(SupportsBytes):
