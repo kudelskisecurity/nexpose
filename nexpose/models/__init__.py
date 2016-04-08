@@ -2,8 +2,9 @@ import types
 from abc import ABCMeta, abstractmethod
 
 from lxml import etree
-from typing import Iterable, Any, cast, TypeVar, Generic
+from typing import Iterable, Any, cast, TypeVar, Generic, Callable
 
+from nexpose.error import StillElementInAttribError
 from nexpose.types import Element
 
 
@@ -37,6 +38,7 @@ class Object:
 
 
 SubClass = TypeVar('SubClass')
+T = TypeVar('T')
 
 
 class XmlParse(Object, Generic[SubClass], metaclass=ABCMeta):
@@ -51,7 +53,23 @@ class XmlParse(Object, Generic[SubClass], metaclass=ABCMeta):
 
         # TODO check for xml emptyness
 
+        for elem in xml.iter():
+            if elem.attrib:
+                raise StillElementInAttribError(xml)
+
         return ret
+
+    @staticmethod
+    def _pop(xml: Element, key: str, to_apply: Callable[[str], T], default: Any = None,
+             invalid_values: Iterable[Any] = (None,)) -> T:
+        if key not in xml.attrib:
+            return default
+
+        e = xml.attrib[key]
+        if e in invalid_values:
+            return default
+
+        return to_apply(e)
 
 
 class XmlFormat(Object, metaclass=ABCMeta):

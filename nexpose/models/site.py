@@ -1,3 +1,5 @@
+import uuid
+
 from lxml.etree import SubElement
 from typing import Iterable, Tuple, Optional
 
@@ -37,7 +39,10 @@ class Site(XmlFormat):
     lies:
      - `id` has to be a number
     """
-    def __init__(self, name: str, hosts: Hosts, scan_config: ScanConfig, site_id: int = -1) -> None:
+
+    def __init__(self, hosts: Hosts, scan_config: ScanConfig, name: Optional[str] = None, site_id: int = -1) -> None:
+        if name is None:
+            name = str(uuid.uuid4())
         self.id = site_id
         self.name = name
         self.hosts = hosts

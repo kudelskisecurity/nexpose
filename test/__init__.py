@@ -2,10 +2,12 @@ import os
 import unittest
 
 from typing import Mapping, Optional, Any, Tuple
+from typing import MutableSet
 
 from nexpose import Nexpose
 # TODO but is simply matter of `first_false(lambda x: x is None, mapping)`
 from nexpose.models.site import Hosts
+from nexpose.models.site import Site
 from nexpose.types import IP
 
 
@@ -62,7 +64,13 @@ class TestBaseLogged(TestBase):
 
         self.nexpose = Nexpose(**kwargs)
 
-    def _tearDown(self):
+        self.added_site = set()  # type: MutableSet[Site]
+
+    def tearDown(self):
         super().tearDown()
+
+        for site in self.added_site:
+            self.nexpose.site.site_delete(site=site)
+
         for api_version in [(1, 1)]:
             self.nexpose.session.logout(api_version=api_version)

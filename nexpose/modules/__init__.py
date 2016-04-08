@@ -45,6 +45,8 @@ class ModuleBase:
         ans = session.post(url=url, data=req_raw, verify=False)
         ans_xml = etree.fromstring(ans.content)
 
+        print(ans.text)
+
         self.__check_failure(xml=ans_xml, api_version=api_version)
 
         return ans_xml
@@ -53,6 +55,10 @@ class ModuleBase:
 
     @staticmethod
     def __get_session() -> requests.Session:
+        """
+        lies:
+         - it is not solely based on login token but also on cookies
+        """
         if ModuleBase.__session is None:
             session = requests.Session()
             session.headers['Content-Type'] = 'text/xml'

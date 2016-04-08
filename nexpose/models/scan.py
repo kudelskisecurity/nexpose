@@ -1,4 +1,6 @@
-from nexpose.models import XmlFormat, Object
+from typing import Iterable
+
+from nexpose.models import XmlFormat, Object, XmlParse
 from nexpose.types import Element
 
 
@@ -21,3 +23,24 @@ class ScanConfig(XmlFormat):
 class Scan(Object):
     def __init__(self, scan_id: int) -> None:
         self.id = scan_id
+
+
+class Vulnerabilities(XmlParse['Vulnerabilities']):
+
+    @staticmethod
+    def _from_xml(xml: Element) -> 'Vulnerabilities':
+        pass
+
+
+class ScanSummary(XmlParse['ScanSummary']):
+
+    def __init__(self, vulnerabilities: Iterable[Vulnerabilities]) -> None:
+        self.vulnerabilities = vulnerabilities
+
+    @staticmethod
+    def _from_xml(xml: Element) -> 'ScanSummary':
+        for e in xml:
+            print(e.tag)
+            if e.tag == 'vulnerabilities':
+                print(e.attrib)
+
