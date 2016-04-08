@@ -39,8 +39,4 @@ class ScanSummary(XmlParse['ScanSummary']):
 
     @staticmethod
     def _from_xml(xml: Element) -> 'ScanSummary':
-        for e in xml:
-            print(e.tag)
-            if e.tag == 'vulnerabilities':
-                print(e.attrib)
-
+        pass

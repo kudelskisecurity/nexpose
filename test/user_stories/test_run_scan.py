@@ -43,6 +43,7 @@ class TestRunScan(TestBaseLogged):
 
         report_summary = self.nexpose.report.report_generate(report=report_saved)
         self.__wait_until_report_completion(report=report_summary)
-        report_generated = self.__get_report_from_listing(report=report_summary)
+        reports_generated = self.__get_report_from_listing(report=report_summary)
 
-        print(list(report_generated))
+        for report_generated in reports_generated:
+            self.assertIsNotNone(report_generated.report_uri)

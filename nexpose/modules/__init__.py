@@ -45,8 +45,6 @@ class ModuleBase:
         ans = session.post(url=url, data=req_raw, verify=False)
         ans_xml = etree.fromstring(ans.content)
 
-        print(ans.text)
-
         self.__check_failure(xml=ans_xml, api_version=api_version)
 
         return ans_xml
