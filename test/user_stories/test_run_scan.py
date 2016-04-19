@@ -1,12 +1,12 @@
 import time
 
+from requests.exceptions import ConnectionError
 from typing import Iterator
 
 from nexpose.models.report import ReportConfig, ReportConfigFormat, ReportSummary, ReportConfigSummary, \
     ReportSummaryStatus
-from nexpose.models.scan import ScanConfig
+from nexpose.models.scan import ScanConfig, Status
 from nexpose.models.site import Site
-from nexpose.modules.scan import ScanStatus
 from test import TestBaseLogged
 
 
@@ -20,8 +20,23 @@ class TestRunScan(TestBaseLogged):
         while next(self.__get_report_from_listing(report)).status is not ReportSummaryStatus.generated:
             time.sleep(1)
 
-    def test_run_scan(self):
-        template = next(t for t in self.nexpose.scan.templates() if t.id == 'discovery')
+    def __wait_until_scan_completion(self, scan_id: int) -> None:
+        while True:
+            try:
+                if self.nexpose.scan.scan_status(scan_id=scan_id) is Status.finished:
+                    return
+            except ConnectionError:
+                pass
+            time.sleep(1)
+
+    def test_run_scan_discovery(self):
+        self.__run_scan('discovery')
+
+    def test_run_scan_full_audit(self):
+        self.__run_scan('full-audit')
+
+    def __run_scan(self, scan_template_name: str):
+        template = next(t for t in self.nexpose.scan.templates() if t.id == scan_template_name)
 
         site = Site(
             hosts=self.hosts,
@@ -30,20 +45,20 @@ class TestRunScan(TestBaseLogged):
         site_saved = self.nexpose.site.site_save(site=site)
         self.added_site.add(site_saved)
 
-        scan = self.nexpose.scan.site_scan(site=site_saved)
-        while self.nexpose.scan.scan_status(scan=scan) is not ScanStatus.finished:
-            time.sleep(1)
+        scan_id = self.nexpose.scan.site_scan(site=site_saved)
+        self.__wait_until_scan_completion(scan_id)
 
         template = next(template
                         for template in self.nexpose.report.report_template_listing()
                         if template.id == 'audit-report')
 
-        report = ReportConfig(template=template, format=ReportConfigFormat.raw_xml_v2, site=site_saved)
+        report = ReportConfig(template=template, report_format=ReportConfigFormat.raw_xml_v2, site=site_saved)
         report_saved = self.nexpose.report.report_save_request(report=report)
 
         report_summary = self.nexpose.report.report_generate(report=report_saved)
         self.__wait_until_report_completion(report=report_summary)
-        reports_generated = self.__get_report_from_listing(report=report_summary)
+        report_generated = next(self.__get_report_from_listing(report=report_summary))
 
-        for report_generated in reports_generated:
-            self.assertIsNotNone(report_generated.report_uri)
+        self.assertIsNotNone(report_generated.report_uri)
+
+        self.assertIsNotNone(self.nexpose.extra.get_report_raw_xml_2(report_generated))

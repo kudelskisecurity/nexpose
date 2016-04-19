@@ -55,7 +55,7 @@ class XmlParse(Object, Generic[SubClass], metaclass=ABCMeta):
 
         for elem in xml.iter():
             if elem.attrib:
-                raise StillElementInAttribError(xml)
+                raise StillElementInAttribError(elem)
 
         return ret
 
@@ -65,7 +65,7 @@ class XmlParse(Object, Generic[SubClass], metaclass=ABCMeta):
         if key not in xml.attrib:
             return default
 
-        e = xml.attrib[key]
+        e = xml.attrib.pop(key)
         if e in invalid_values:
             return default
 

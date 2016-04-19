@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from http.client import BadStatusLine
 
 import requests
 from lxml import etree
@@ -41,7 +42,6 @@ class ModuleBase:
                                  encoding='UTF-8')
 
         session = self.__get_session()
-
         ans = session.post(url=url, data=req_raw, verify=False)
         ans_xml = etree.fromstring(ans.content)
 
@@ -49,10 +49,27 @@ class ModuleBase:
 
         return ans_xml
 
+    def _get_xml(self, path: str) -> Element:
+        assert not path.startswith('/')
+        url = 'https://{host}:{port}/{path}'.format(
+            host=self.host,
+            port=self.port,
+            path=path,
+        )
+
+        session = self.__get_session(reset=False)
+
+        ans = session.get(url=url, verify=False)
+        ans_xml = etree.fromstring(ans.content)
+
+        print(ans.text)
+
+        return ans_xml
+
     __session = None
 
     @staticmethod
-    def __get_session() -> requests.Session:
+    def __get_session(reset: bool = True) -> requests.Session:
         """
         lies:
          - it is not solely based on login token but also on cookies
@@ -62,7 +79,8 @@ class ModuleBase:
             session.headers['Content-Type'] = 'text/xml'
             ModuleBase.__session = session
         else:
-            ModuleBase.__session.cookies.clear()  # nexpose dislike having login cookies and login for other thing
+            if reset:
+                ModuleBase.__session.cookies.clear()  # nexpose dislike having login cookies and login for other thing
 
         return ModuleBase.__session
 

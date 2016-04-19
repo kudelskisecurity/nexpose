@@ -1,30 +1,11 @@
-from enum import Enum
-
 from lxml.etree import Element
 from typing import Iterable
 
-from nexpose.models.scan import Scan as ScanModel, ScanSummary
+from nexpose.models.scan import Scan as ScanModel, ScanSummary, Status
 from nexpose.models.scan import Template
 from nexpose.models.site import Site
 from nexpose.modules import ModuleBase
 from nexpose.utils import xml_pop
-
-
-class ScanStatus(Enum):
-    """
-    lies:
-     - `integrating` is not in DTD
-    """
-    running = 'running'
-    finished = 'finished'
-    stopped = 'stopped'
-    error = 'error'
-    dispatched = 'dispatched'
-    paused = 'paused'
-    aborted = 'aborted'
-    unknown = 'unknown'
-
-    integrating = 'integrating'
 
 
 class Scan(ModuleBase):
@@ -50,7 +31,7 @@ class Scan(ModuleBase):
             Template(template_id='web-audit'),
         }
 
-    def site_scan(self, site: Site) -> ScanModel:
+    def site_scan(self, site: Site) -> int:
         request = Element('SiteScanRequest', attrib={
             'site-id': str(site.id),
         })
@@ -58,16 +39,16 @@ class Scan(ModuleBase):
         ans = self._post(xml=request)
         scan = xml_pop(xml=ans, key='Scan')
 
-        return ScanModel(scan_id=int(scan.attrib['scan-id']))
+        return int(scan.attrib['scan-id'])
 
-    def scan_status(self, scan: ScanModel) -> ScanStatus:
+    def scan_status(self, scan_id: int) -> Status:
         request = Element('ScanStatusRequest', attrib={
-            'scan-id': str(scan.id),
+            'scan-id': str(scan_id),
         })
 
         ans = self._post(xml=request)
 
-        return ScanStatus(ans.attrib['status'])
+        return Status(ans.attrib['status'])
 
     def scan_statistics(self, scan: ScanModel) -> ScanSummary:
         request = Element('ScanStatisticsRequest', attrib={

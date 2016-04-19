@@ -9,6 +9,10 @@ from nexpose.types import IP, Element
 
 
 class Hosts(XmlFormat):
+    """
+    lies:
+     - we are not supposed to give ip_range as DNS host, but it works and the range doesn't
+    """
     def __init__(self, ip_range: Iterable[Tuple[IP, Optional[IP]]], hosts: Iterable[str]) -> None:
         self.ip_range = ip_range
         self.hosts = hosts
@@ -26,12 +30,9 @@ class Hosts(XmlFormat):
             elem = SubElement(root, 'host')
             elem.text = host
 
-        for ip_range_elem in self.ip_range:
-            attribs = {
-                'from': Hosts.__ip_to_str(ip=ip_range_elem[0]),
-                'to': Hosts.__ip_to_str(ip=ip_range_elem[1]),
-            }
-            SubElement(root, 'host', attrib={k: v for k, v in attribs.items() if v is not None})
+        for ip in self.ip_range:
+            elem = SubElement(root, 'host')
+            elem.text = self.__ip_to_str(ip[0])
 
 
 class Site(XmlFormat):

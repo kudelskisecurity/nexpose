@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, Mapping
 
+from nexpose.modules.extra import Extra
 from nexpose.modules.report import Report
 from nexpose.modules.scan import Scan
 from nexpose.modules.session import Session
@@ -15,3 +16,5 @@ class Nexpose:
         self.site = Site(**kwargs)
         self.scan = Scan(**kwargs)
         self.report = Report(**kwargs)
+
+        self.extra = Extra(**kwargs)

@@ -9,4 +9,4 @@ class WeirdXmlAnswerError(Exception):
 
 class StillElementInAttribError(WeirdXmlAnswerError):
     def __init__(self, element: Element) -> None:
-        super().__init__(repr(element), repr(element.attrib))
+        super().__init__(element, element.attrib)

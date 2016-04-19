@@ -1,12 +1,16 @@
-from typing import Iterable
+from typing import Iterable, TypeVar
 
 from nexpose.types import Element as ElementType
 
+T = TypeVar('T')
 
-def xml_pop(xml: ElementType, key: str) -> ElementType:
+
+def xml_pop(xml: ElementType, key: str, *default: ElementType) -> ElementType:
     elem = xml.find(key)
     if elem is None:
-        raise KeyError(key)
+        if len(default) == 0:
+            raise KeyError(key)
+        return default[0]
 
     xml.remove(elem)
 
@@ -20,4 +24,3 @@ def xml_pop_list(xml: ElementType, key: str) -> Iterable[ElementType]:
         xml.remove(elem)
 
     return elems
-

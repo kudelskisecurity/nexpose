@@ -32,7 +32,7 @@ class Report(ModuleBase):
 
     def report_generate(self, report: ReportConfig) -> ReportSummary:
         request = Element('ReportGenerateRequest', attrib={
-            'report-id': report.id,
+            'report-id': str(report.id),
         })
 
         ans = self._post(xml=request)
