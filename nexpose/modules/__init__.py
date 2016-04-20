@@ -18,8 +18,7 @@ class ModuleBase:
         self.host = host
         self.port = port
 
-        self.sessions_id = defaultdict(
-            default_factory=lambda: None)  # type: MutableMapping[Tuple[int, int], Optional[str]]
+        self.sessions_id = defaultdict(lambda: None)  # type: MutableMapping[Tuple[int, int], Optional[str]]
         if sessions_id is not None:
             self.sessions_id.update(sessions_id)
 
