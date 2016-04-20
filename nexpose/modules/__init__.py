@@ -1,6 +1,5 @@
 import logging
 from collections import defaultdict
-from http.client import BadStatusLine
 
 import requests
 from lxml import etree
@@ -60,8 +59,6 @@ class ModuleBase:
 
         ans = session.get(url=url, verify=False)
         ans_xml = etree.fromstring(ans.content)
-
-        print(ans.text)
 
         return ans_xml
 

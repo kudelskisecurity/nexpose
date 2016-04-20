@@ -19,10 +19,7 @@ def _get_env_args() -> Mapping[str, str]:
     kwargs = {
         'host': os.environ['NEXPOSE_HOST'],
         'port': os.environ.get('NEXPOSE_PORT', None),
-        'sessions_id': {
-            (1, 1): os.environ.get('NEXPOSE_API_1_1_SESSION_ID', None),
-            (1, 2): os.environ.get('NEXPOSE_API_1_2_SESSION_ID', None),
-        }
+        'sessions_id': None
     }
 
     return {k: v for k, v in kwargs.items()
