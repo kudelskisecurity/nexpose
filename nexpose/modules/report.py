@@ -8,7 +8,6 @@ from nexpose.modules import ModuleBase
 from nexpose.utils import xml_pop_list, xml_pop
 
 
-
 class Report(ModuleBase):
     def report_template_listing(self) -> Iterable[ReportTemplateSummary]:
         request = Element('ReportTemplateListingRequest')
@@ -45,4 +44,3 @@ class Report(ModuleBase):
         ans = self._post(xml=request)
 
         return (ReportConfigSummary.from_xml(report) for report in xml_pop_list(xml=ans, key='ReportConfigSummary'))
-

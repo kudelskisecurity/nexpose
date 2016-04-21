@@ -29,23 +29,26 @@ class ReportTemplateSummaryType(Enum):
     jasper = 'jasper'
 
 
-class ReportTemplateSummary(XmlParse):
+class ReportTemplateSummary(XmlParse['ReportTemplateSummary']):
     def __init__(self, template_id: str, name: str, builtin: bool, scope: ReportScope,
-                 template_type: ReportTemplateSummaryType) -> None:
+                 template_type: ReportTemplateSummaryType, description: 'Description') -> None:
         self.id = template_id
         self.name = name
         self.builtin = builtin
         self.scope = scope
         self.template_type = template_type
+        self.description = description
 
     @staticmethod
     def _from_xml(xml: Element) -> 'ReportTemplateSummary':
+        assert xml.tag == 'ReportTemplateSummary'
         return ReportTemplateSummary(
             template_id=xml.attrib.pop('id'),
             name=xml.attrib.pop('name'),
             builtin=bool(xml.attrib.pop('builtin')),
             scope=ReportScope(xml.attrib.pop('scope')),
             template_type=ReportTemplateSummaryType(xml.attrib.pop('type')),
+            description=Description.from_xml(xml_pop(xml, 'description')),
         )
 
 
@@ -293,13 +296,32 @@ def dispatch_nested_parsing(xml: Element) -> Set[NestedType]:
 
 
 class Description(XmlParse['Description']):
-    def __init__(self, element: 'ContainerBlockElement') -> None:
-        self.element = element
+    def __init__(self, nested: List[NestedType]) -> None:
+        self.nested = nested
+
+    @staticmethod
+    def __add_tail(res: List[Union[str, NestedType]], xml: Element) -> None:
+        # TODO copied from Paragraph
+        tail = xml.tail
+        if tail is not None:
+            tail = ' '.join(tail.split())
+            if tail != '':
+                res.append(tail)
 
     @staticmethod
     def _from_xml(xml: Element):
+        assert xml.tag == 'description'
+
+        res = []
+        Description.__add_tail(res, xml)
+
+        for child in xml:
+            xml.remove(child)
+            res.append(dispatch_single_nested(child))
+            Description.__add_tail(res, xml)
+
         return Description(
-            element=xml_pop_apply(xml, 'ContainerBlockElement', ContainerBlockElement.from_xml),
+            nested=res,
         )
 
 
