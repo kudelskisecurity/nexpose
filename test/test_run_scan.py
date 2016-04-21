@@ -1,10 +1,11 @@
 import time
+from lxml import etree
 
 from requests.exceptions import ConnectionError
 from typing import Iterator
 
 from nexpose.models.report import ReportConfig, ReportConfigFormat, ReportSummary, ReportConfigSummary, \
-    ReportSummaryStatus
+    ReportSummaryStatus, NexposeReport
 from nexpose.models.scan import ScanConfig, Status
 from nexpose.models.site import Site
 from test import TestBaseLogged
@@ -34,6 +35,9 @@ class TestRunScan(TestBaseLogged):
 
     def test_run_scan_full_audit(self):
         self.__run_scan('full-audit')
+
+    def test_run_scan_pentest_audit(self):
+        self.__run_scan('pentest-audit')
 
     def __run_scan(self, scan_template_name: str):
         template = next(t for t in self.nexpose.scan.templates() if t.id == scan_template_name)

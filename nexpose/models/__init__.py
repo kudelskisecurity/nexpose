@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 from lxml import etree
 from typing import Iterable, Any, cast, TypeVar, Generic, Callable
 
-from nexpose.error import StillElementInAttribError
+from nexpose.error import StillElementInAttribError, StillSubElementError
 from nexpose.types import Element
 
 
@@ -49,11 +49,13 @@ class XmlParse(Object, Generic[SubClass], metaclass=ABCMeta):
 
     @classmethod
     def from_xml(cls, xml: Element) -> SubClass:
+        children = list(xml.iter())
+
         ret = cls._from_xml(xml)  # type: SubClass
 
-        # TODO check for xml emptyness
-
-        for elem in xml.iter():
+        for elem in children:
+            if len(elem) > 0:
+                raise StillSubElementError(elem)
             if elem.attrib:
                 raise StillElementInAttribError(elem)
 

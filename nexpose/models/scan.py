@@ -5,6 +5,7 @@ from typing import Iterable
 
 from nexpose.models import XmlFormat, Object, XmlParse
 from nexpose.types import Element
+from nexpose.utils import parse_date
 
 
 class Status(Enum):
@@ -51,13 +52,13 @@ class Scan(XmlParse['Scan']):
 
     @staticmethod
     def _from_xml(xml: Element) -> 'Scan':
-        scan_id = int(xml.attrib.pop('id'))
-        name = xml.attrib.pop('name')
-        status = Status(xml.attrib.pop('status'))
-        start_time = datetime.datetime.strptime(xml.attrib.pop('startTime'), '%Y%m%dT%H%M%S%f')
-        end_time = datetime.datetime.strptime(xml.attrib.pop('endTime'), '%Y%m%dT%H%M%S%f')
-
-        return Scan(scan_id=scan_id, name=name, status=status, start_time=start_time, end_time=end_time)
+        return Scan(
+            scan_id=int(xml.attrib.pop('id')),
+            name=xml.attrib.pop('name'),
+            status=Status(xml.attrib.pop('status')),
+            start_time=parse_date(xml.attrib.pop('startTime')),
+            end_time=parse_date(xml.attrib.pop('endTime'))
+        )
 
 
 class Vulnerabilities(XmlParse['Vulnerabilities']):

@@ -3,13 +3,14 @@ from enum import Enum
 from uuid import uuid4
 
 from lxml.etree import SubElement
-from typing import Optional, Set
+from typing import Optional, Set, Union, List
 
+from nexpose.error import WeirdXmlAnswerError
 from nexpose.models import XmlParse, XmlFormat
 from nexpose.models.scan import Scan
 from nexpose.models.site import Site
 from nexpose.types import Element, IP, str_to_IP
-from nexpose.utils import xml_pop
+from nexpose.utils import xml_pop, parse_date, xml_pop_children, xml_pop_list, xml_pop_apply
 
 
 class ReportScope(Enum):
@@ -144,7 +145,7 @@ class ReportConfigSummary(XmlParse):
         if generated_on_raw == '':
             generated_on = None
         else:
-            generated_on = datetime.datetime.strptime(generated_on_raw, '%Y%m%dT%H%M%S%f')
+            generated_on = parse_date(generated_on_raw)
 
         return ReportConfigSummary(
             template_id=xml.attrib.pop('template-id'),
@@ -195,13 +196,15 @@ class Fingerprint(XmlParse['Fingerprint']):
 
 class DeviceClass(Enum):
     general = 'General'
+    wap = 'WAP'
 
 
 class OS(Fingerprint):
     def __init__(self, product: str, certainty: float, family: Optional[str], version: Optional[str],
-                 device_class: Optional[DeviceClass], vendor: Optional[str]) -> None:
+                 device_class: Optional[DeviceClass], vendor: Optional[str], arch: Optional[str]) -> None:
         super().__init__(product=product, certainty=certainty, family=family, version=version, vendor=vendor)
         self.device_class = device_class
+        self.arch = arch
 
     @staticmethod
     def from_sub_xml(fingerprint: Fingerprint, xml: Element) -> 'OS':
@@ -212,6 +215,7 @@ class OS(Fingerprint):
             version=fingerprint.version,
             device_class=XmlParse._pop(xml, 'device-class', DeviceClass),
             vendor=fingerprint.vendor,
+            arch=xml.attrib.pop('arch', None),
         )
 
 
@@ -232,6 +236,7 @@ class PortStatus(Enum):
 
 class Protocol(Enum):
     tcp = 'tcp'
+    udp = 'udp'
 
 
 class Config(XmlParse['Config']):
@@ -247,27 +252,239 @@ class Config(XmlParse['Config']):
         )
 
 
-class Test(XmlParse['Test']):
+class TestStatus(Enum):
+    not_vulnerable = 'not-vulnerable'
+    overridden_vulnerable_version = 'overridden-vulnerable-version'
+    skipped_version = 'skipped-version'
+    vulnerable_version = 'vulnerable-version'
+    vulnerable_exploited = 'vulnerable-exploited'
+    skipped_disabled = 'skipped-disabled'
+    error = 'error'
+    unknown = 'unknown'
+
+
+class PCIComplianceStatus(Enum):
+    fail = 'fail'
+    pass_ = 'pass'
+
+
+NestedType = Union['Paragraph', 'UnorderedList', 'ContainerBlockElement', 'URLLink', 'OrderedList']
+
+
+def dispatch_single_nested(xml: Element) -> NestedType:
+    nested = {
+        'Paragraph': Paragraph.from_xml,
+        'UnorderedList': UnorderedList.from_xml,
+        'ContainerBlockElement': ContainerBlockElement.from_xml,
+        'URLLink': URLLink.from_xml,
+        'OrderedList': OrderedList.from_xml,
+        'Table': Table.from_xml,
+    }
+
+    return nested[xml.tag](xml)
+
+
+def dispatch_nested_parsing(xml: Element) -> Set[NestedType]:
+    children = list(xml)
+    for child in children:
+        xml.remove(child)
+
+    return frozenset(dispatch_single_nested(child) for child in children)
+
+
+class Description(XmlParse['Description']):
+    def __init__(self, element: 'ContainerBlockElement') -> None:
+        self.element = element
+
     @staticmethod
     def _from_xml(xml: Element):
-        return Test()
+        return Description(
+            element=xml_pop_apply(xml, 'ContainerBlockElement', ContainerBlockElement.from_xml),
+        )
+
+
+class URLLink(XmlParse['URLLink']):
+    def __init__(self, url: str, title: str) -> None:
+        self.url = url
+        self.title = title
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        if xml.attrib['LinkURL'] != xml.attrib.pop('href', xml.attrib['LinkURL']):
+            raise WeirdXmlAnswerError('{} != {}', xml.attrib['LinkURL'], xml.attrib['href'])
+
+        return URLLink(
+            url=xml.attrib.pop('LinkURL'),
+            title=xml.attrib.pop('LinkTitle'),
+        )
+
+
+class OrderedList(XmlParse['OrderedList']):
+    def __init__(self, elements: List[NestedType]) -> None:
+        self.elements = elements
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return OrderedList(
+            elements=[ListItem.from_xml(item) for item in xml_pop_list(xml, 'ListItem')],
+        )
+
+
+class ContainerBlockElement(XmlParse['ContainerBlockElement']):
+    def __init__(self, nested: Set[NestedType]) -> None:
+        self.nested = frozenset(nested)
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return ContainerBlockElement(
+            nested=dispatch_nested_parsing(xml),
+        )
+
+
+class TableCell(XmlParse['TableCell']):
+    def __init__(self, content: 'Paragraph') -> None:
+        self.content = content
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        assert xml.tag == 'TableCell'
+        return TableCell(
+            content=Paragraph.from_xml(xml_pop(xml, 'Paragraph')),
+        )
+
+
+class TableRow(XmlParse['TableRow']):
+    def __init__(self, title: str, cells: List[TableCell]) -> None:
+        self.title = title
+        self.cells = cells
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        assert xml.tag == 'TableRow'
+        return TableRow(
+            title=xml.attrib.pop('RowTitle'),
+            cells=[TableCell.from_xml(cell) for cell in xml_pop_list(xml, 'TableCell')],
+        )
+
+
+class Table(XmlParse['Table']):
+    def __init__(self, title: str, rows: List[TableRow]) -> None:
+        self.title = title
+        self.rows = rows
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        assert xml.tag == 'Table'
+        return Table(
+            title=xml.attrib.pop('TableTitle'),
+            rows=[TableRow.from_xml(row) for row in xml_pop_list(xml, 'TableRow')],
+        )
+
+
+class ListItem(XmlParse['ListItem']):
+    def __init__(self, text: str, nested: Set[NestedType]) -> None:
+        self.text = text
+        self.nested = frozenset(nested)
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return ListItem(
+            text=xml.text,
+            nested=dispatch_nested_parsing(xml),
+        )
+
+
+class UnorderedList(XmlParse['UnorderedList']):
+    def __init__(self, items: Set[ListItem]) -> None:
+        self.items = frozenset(items)
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return UnorderedList(
+            items={ListItem.from_xml(item) for item in xml_pop_list(xml, 'ListItem')}
+        )
+
+
+class Paragraph(XmlParse['Paragraph']):
+    def __init__(self, content: List[Union[str, NestedType]], preformat: Optional[bool]) -> None:
+        self.content = content
+        self.preformat = preformat
+
+    @staticmethod
+    def __add_tail(res: List[Union[str, NestedType]], xml: Element) -> None:
+        tail = xml.tail
+        if tail is not None:
+            tail = ' '.join(tail.split())
+            if tail != '':
+                res.append(tail)
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        res = []
+        Paragraph.__add_tail(res, xml)
+
+        for child in xml:
+            xml.remove(child)
+            res.append(dispatch_single_nested(child))
+            Paragraph.__add_tail(res, xml)
+
+        preformat = xml.attrib.pop('preformat', None) or xml.attrib.pop('preFormat', None)
+        if preformat is not None:
+            preformat = bool(preformat)
+
+        return Paragraph(
+            content=res,
+            preformat=preformat,
+        )
+
+
+class Test(XmlParse['Test']):
+    def __init__(self, test_id: str, status: TestStatus, key: str, scan_id: int,
+                 vulnerable_since: Optional[datetime.datetime],
+                 pci_compliance_status: Optional[PCIComplianceStatus], paragraph: Paragraph) -> None:
+        self.id = test_id
+        self.status = status
+        self.key = key
+        self.scan_id = scan_id
+        self.vulnerable_since = vulnerable_since
+        self.pci_compliance_status = pci_compliance_status
+        self.paragraph = paragraph
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        paragraph_xml = xml_pop(xml, 'Paragraph', None)
+        if paragraph_xml is None:
+            paragraph = None
+        else:
+            paragraph = Paragraph.from_xml(paragraph_xml)
+
+        return Test(
+            test_id=xml.attrib.pop('id'),
+            status=TestStatus(xml.attrib.pop('status')),
+            key=xml.attrib.pop('key'),
+            scan_id=xml.attrib.pop('scan-id'),
+            vulnerable_since=XmlParse._pop(xml, 'vulnerable-since', parse_date),
+            pci_compliance_status=XmlParse._pop(xml, 'pci-compliance-status', PCIComplianceStatus),
+            paragraph=paragraph,
+        )
 
 
 class Service(XmlParse):
     def __init__(self, name: str, fingerprints: Set[Fingerprint], configuration: Set[Config],
                  tests: Set[Test]) -> None:
         self.name = name
-        self.fingerprints = fingerprints
-        self.configuration = configuration
-        self.tests = tests
+        self.fingerprints = frozenset(fingerprints)
+        self.configuration = frozenset(configuration)
+        self.tests = frozenset(tests)
 
     @staticmethod
     def _from_xml(xml: Element):
         return Service(
             name=xml.attrib.pop('name'),
-            fingerprints={Fingerprint.from_xml(fingerprint) for fingerprint in xml_pop(xml, 'fingerprints', [])},
-            configuration={Config.from_xml(config) for config in xml_pop(xml, 'configuration', [])},
-            tests={Test.from_xml(test) for test in xml.find('tests')},
+            fingerprints={Fingerprint.from_xml(fingerprint) for fingerprint in
+                          xml_pop_children(xml, 'fingerprints', [])},
+            configuration={Config.from_xml(config) for config in xml_pop_children(xml, 'configuration', [])},
+            tests={Test.from_xml(test) for test in xml_pop_children(xml, 'tests')},
         )
 
 
@@ -276,7 +493,7 @@ class Endpoint(XmlParse['Endpoint']):
         self.protocol = protocol
         self.port = port
         self.status = status
-        self.services = services
+        self.services = frozenset(services)
 
     @staticmethod
     def _from_xml(xml: Element) -> 'Endpoint':
@@ -284,7 +501,7 @@ class Endpoint(XmlParse['Endpoint']):
             protocol=Protocol(xml.attrib.pop('protocol')),
             port=int(xml.attrib.pop('port')),
             status=PortStatus(xml.attrib.pop('status')),
-            services={Service.from_xml(service) for service in xml.find('services')},
+            services={Service.from_xml(service) for service in xml_pop_children(xml, 'services')},
         )
 
 
@@ -298,9 +515,9 @@ class SiteImportance(Enum):
 
 class Node(XmlParse['Node']):
     def __init__(self, address: IP, status: NodeStatus, device_id: int, site_name: str,
-                 site_importance: SiteImportance,
-                 scan_template_name: str, risk_score: float, names: Set[Name], fingerprints: Set[Fingerprint],
-                 endpoints: Set[Endpoint]) -> None:
+                 site_importance: SiteImportance, scan_template_name: str, risk_score: float, names: Set[Name],
+                 hardware_address: Optional[str], fingerprints: Set[Fingerprint], software: Set[Fingerprint],
+                 endpoints: Set[Endpoint], tests: Set[Test]) -> None:
         self.address = address
         self.status = status
         self.device_id = device_id
@@ -308,9 +525,12 @@ class Node(XmlParse['Node']):
         self.site_importance = site_importance
         self.scan_template_name = scan_template_name
         self.risk_score = risk_score
-        self.names = names
-        self.fingerprints = fingerprints
-        self.endpoints = endpoints
+        self.hardware_address = hardware_address
+        self.names = frozenset(names)
+        self.fingerprints = frozenset(fingerprints)
+        self.software = frozenset(software)
+        self.endpoints = frozenset(endpoints)
+        self.tests = frozenset(tests)
 
     @staticmethod
     def _from_xml(xml: Element) -> 'Node':
@@ -322,22 +542,166 @@ class Node(XmlParse['Node']):
             site_importance=SiteImportance(xml.attrib.pop('site-importance')),
             scan_template_name=xml.attrib.pop('scan-template'),
             risk_score=float(xml.attrib.pop('risk-score')),
-            names={Name.from_xml(name) for name in xml_pop(xml, 'names', [])},
-            fingerprints={Fingerprint.from_xml(fingerprint) for fingerprint in xml.find('fingerprints')},
-            endpoints={Endpoint.from_xml(endpoint) for endpoint in xml.find('endpoints')},
+            hardware_address=xml.attrib.pop('hardware-address', None),
+            names={Name.from_xml(name) for name in xml_pop_children(xml, 'names', [])},
+            fingerprints={Fingerprint.from_xml(fingerprint) for fingerprint in xml_pop_children(xml, 'fingerprints')},
+            software={Fingerprint.from_xml(fingerprint) for fingerprint in xml_pop_children(xml, 'software', [])},
+            endpoints={Endpoint.from_xml(endpoint) for endpoint in xml_pop_children(xml, 'endpoints')},
+            tests={Test.from_xml(test) for test in xml_pop_children(xml, 'tests')},
+        )
+
+
+class Malware(XmlParse['Malware']):
+    def __init__(self, name: Set[Name]) -> None:
+        self.name = name
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return Malware(
+            name={Name.from_xml(name) for name in xml_pop_list(xml, 'name')},
+        )
+
+
+class ExploitType(Enum):
+    exploitdb = 'exploitdb'
+    metasploit = 'metasploit'
+
+
+class SkillLevel(Enum):
+    intermediate = 'Intermediate'
+    expert = 'Expert'
+    novice = 'Novice'
+
+
+class Exploit(XmlParse['Exploit']):
+    def __init__(self, exploit_id: int, title: str, type: ExploitType, link: str, skill_level: SkillLevel) -> None:
+        self.exploit_id = exploit_id
+        self.title = title
+        self.type = type
+        self.link = link
+        self.skill_level = skill_level
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return Exploit(
+            exploit_id=xml.attrib.pop('id'),
+            title=xml.attrib.pop('title'),
+            type=ExploitType(xml.attrib.pop('type')),
+            link=xml.attrib.pop('link'),
+            skill_level=SkillLevel(xml.attrib.pop('skillLevel')),
+        )
+
+
+class ReferenceSource(Enum):
+    apple = 'APPLE'
+    bid = 'BID'
+    ciac = 'CIAC'
+    conectiva = 'CONECTIVA'
+    cve = 'CVE'
+    redhat = 'REDHAT'
+    sgi = 'SGI'
+    url = 'URL'
+    xf = 'XF'
+    caldera = 'CALDERA'
+    mandrake = 'MANDRAKE'
+    debian = 'DEBIAN'
+    cert = 'CERT'
+    osvdb = 'OSVDB'
+    suse = 'SUSE'
+    oval = 'OVAL'
+    disa_severity = 'DISA_SEVERITY'
+    disa_vmskey = 'DISA_VMSKEY'
+    iavm = 'IAVM'
+    cert_vn = 'CERT-VN'
+    ms = 'MS'
+    netbsd = 'NETBSD'
+    mskb = 'MSKB'
+    mandriva = 'MANDRIVA'
+    sectrack = 'SECTRACK'
+
+
+class Reference(XmlParse['Reference']):
+    def __init__(self, source: ReferenceSource, text: str) -> None:
+        self.source = source
+        self.text = text
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return Reference(
+            source=ReferenceSource(xml.attrib.pop('source')),
+            text=xml.text,
+        )
+
+
+class Tag(XmlParse['Tag']):
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return Tag(
+            text=xml.text,
+        )
+
+
+class Vulnerability(XmlParse['Vulnerability']):
+    def __init__(self, vulnerability_id: str, title: str, severity: int, pci_severity: int, cvss_score: float,
+                 cvss_vector: str, published: datetime.datetime, added: datetime.datetime, modified: datetime.datetime,
+                 risk_score: float, malware: Malware, exploits: Set[Exploit], description: ContainerBlockElement,
+                 references: Set[Reference], tags: Set[Tag], solution: ContainerBlockElement) -> None:
+        self.vulnerability_id = vulnerability_id
+        self.title = title
+        self.severity = severity
+        self.pci_severity = pci_severity
+        self.cvss_score = cvss_score
+        self.cvss_vector = cvss_vector
+        self.published = published
+        self.added = added
+        self.modified = modified
+        self.risk_score = risk_score
+        self.malware = malware
+        self.exploits = exploits
+        self.description = description
+        self.references = references
+        self.tags = tags
+        self.solution = solution
+
+    @staticmethod
+    def _from_xml(xml: Element):
+        return Vulnerability(
+            vulnerability_id=xml.attrib.pop('id'),
+            title=xml.attrib.pop('title'),
+            severity=int(xml.attrib.pop('severity')),
+            pci_severity=int(xml.attrib.pop('pciSeverity')),
+            cvss_score=float(xml.attrib.pop('cvssScore')),
+            cvss_vector=xml.attrib.pop('cvssVector'),
+            published=parse_date(xml.attrib.pop('published')),
+            added=parse_date(xml.attrib.pop('added')),
+            modified=parse_date(xml.attrib.pop('modified')),
+            risk_score=float(xml.attrib.pop('riskScore')),
+            malware=Malware.from_xml(xml_pop(xml, 'malware')),
+            exploits={Exploit.from_xml(exploit) for exploit in xml_pop_children(xml, 'exploits')},
+            description=dispatch_single_nested(xml_pop(xml_pop(xml, 'description'), 'ContainerBlockElement')),
+            references={Reference.from_xml(reference) for reference in xml_pop_children(xml, 'references')},
+            tags={Tag.from_xml(tag) for tag in xml_pop_children(xml, 'tags')},
+            solution=dispatch_single_nested(xml_pop(xml_pop(xml, 'solution'), 'ContainerBlockElement')),
         )
 
 
 class NexposeReport(XmlParse['NexposeReport']):
-    def __init__(self, version: float, scans: Set[Scan], nodes: Set[Node]) -> None:
+    def __init__(self, version: float, scans: Set[Scan], nodes: Set[Node],
+                 vulnerability_definition: Set[Vulnerability]) -> None:
         self.version = version
-        self.scans = scans
-        self.nodes = nodes
+        self.scans = frozenset(scans)
+        self.nodes = frozenset(nodes)
+        self.vulnerability_definition = vulnerability_definition
 
     @staticmethod
     def _from_xml(xml: Element) -> 'NexposeReport':
         return NexposeReport(
             version=float(xml.attrib.pop('version')),
-            scans={Scan.from_xml(scan) for scan in xml_pop(xml, 'scans')},
-            nodes={Node.from_xml(node) for node in xml_pop(xml, 'nodes')},
+            scans={Scan.from_xml(scan) for scan in xml_pop_children(xml, 'scans')},
+            nodes={Node.from_xml(node) for node in xml_pop_children(xml, 'nodes')},
+            vulnerability_definition={Vulnerability.from_xml(vulnerability) for vulnerability in
+                                      xml_pop_children(xml, 'VulnerabilityDefinitions')},
         )
