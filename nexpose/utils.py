@@ -49,5 +49,12 @@ def xml_text_pop(xml: ElementType) -> Optional[str]:
     return text
 
 
+def xml_tail_pop(xml: ElementType) -> Optional[str]:
+    tail = xml.tail
+    xml.tail = None
+    return tail
+
+
+
 def parse_date(raw: str) -> datetime.datetime:
     return datetime.datetime.strptime(raw, '%Y%m%dT%H%M%S%f')

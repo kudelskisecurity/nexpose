@@ -7,7 +7,7 @@ class WeirdXMLError(Exception):
 
 class NotFullyParsedError(WeirdXMLError):
     def __init__(self, element: Element) -> None:
-        super().__init__(element, element.attrib, element.text)
+        super().__init__(element, element.attrib, element.text, element.tail)
 
 
 class AttribNotFullyParsedError(NotFullyParsedError):

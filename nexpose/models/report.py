@@ -5,14 +5,14 @@ from enum import Enum
 from uuid import uuid4
 
 from lxml.etree import SubElement
-from typing import Optional, Set, Union, List, TypeVar
+from typing import Callable, Mapping, Optional, Set, Union, List, TypeVar, Generic
 
-from nexpose.error import NotFullyParsedError, WeirdXMLError
+from nexpose.error import WeirdXMLError
 from nexpose.models import XmlParse, XmlFormat
 from nexpose.models.scan import Scan
 from nexpose.models.site import Site
 from nexpose.types import Element, IP, str_to_IP
-from nexpose.utils import xml_pop, parse_date, xml_pop_children, xml_pop_list, xml_text_pop
+from nexpose.utils import xml_pop, parse_date, xml_pop_children, xml_pop_list, xml_text_pop, xml_tail_pop
 
 T = TypeVar('T')
 
@@ -192,7 +192,7 @@ class Fingerprint(XmlParse['Fingerprint']):
         childs = {
             'os': OS.from_sub_xml,
             'fingerprint': Fingerprint.from_sub_xml,
-        }
+        }  # type: Mapping[str, Callable[['Fingerprint', Element], 'Fingerprint']]
 
         return childs[xml.tag](fingerprint, xml)
 
@@ -233,7 +233,7 @@ class Name(XmlParse['Name']):
     @staticmethod
     def _from_xml(xml: Element) -> 'Name':
         return Name(
-            text=xml.text,
+            text=xml_text_pop(xml),
         )
 
 
@@ -255,7 +255,7 @@ class Config(XmlParse['Config']):
     def _from_xml(xml: Element) -> 'Config':
         return Config(
             name=xml.attrib.pop('name'),
-            text=xml.text,
+            text=xml_text_pop(xml),
         )
 
 
@@ -291,57 +291,55 @@ def dispatch_single_nested(xml: Element) -> NestedType:
     return nested[xml.tag](xml)
 
 
-def dispatch_nested_parsing(xml: Element) -> Set[NestedType]:
+def dispatch_nested_parsing(xml: Element) -> List[NestedType]:
     children = list(xml)
     for child in children:
         xml.remove(child)
 
-    return frozenset(dispatch_single_nested(child) for child in children)
+    return [dispatch_single_nested(child) for child in children]
 
 
-class TextElement(XmlParse[T], metaclass=abc.ABCMeta):
+class TextElement(XmlParse[T], Generic[T], metaclass=abc.ABCMeta):
     @abstractmethod
     def __str__(self) -> str:
         pass
 
 
-class Description(TextElement['Description']):
-    def __init__(self, nested: List[NestedType]) -> None:
+class MultiNestedElement(TextElement[T], Generic[T], metaclass=abc.ABCMeta):
+    def __init__(self, nested: List[Union[str, NestedType]]) -> None:
         self.nested = nested
 
     @staticmethod
-    def __add_tail(res: List[Union[str, NestedType]], xml: Element) -> None:
-        # TODO copied from Paragraph
-        tail = xml.tail
-        if tail is not None:
-            tail = ' '.join(tail.split())
-            if tail != '':
-                res.append(tail)
-
-    @staticmethod
-    def _from_xml(xml: Element):
-        assert xml.tag == 'description'
-
-        res = []
-        Description.__add_tail(res, xml)
+    def _parse_nested(xml: Element) -> List[Union[str, NestedType]]:
+        ret = [xml_text_pop(xml), xml_tail_pop(xml)]  # type: List[Union[str, NestedType]]
 
         for child in xml:
             xml.remove(child)
-            res.append(dispatch_single_nested(child))
-            Description.__add_tail(res, xml)
+            tail = xml_tail_pop(child)
+            ret.append(dispatch_single_nested(child))
+            ret.append(tail)
 
-        return Description(
-            nested=res,
-        )
+        return [r for r in ret if r is not None]
 
     def __str__(self) -> str:
         return ''.join(str(nested) for nested in self.nested)
 
 
+class Description(MultiNestedElement['Description']):
+    @staticmethod
+    def _from_xml(xml: Element):
+        assert xml.tag == 'description'
+
+        return Description(
+            nested=Description._parse_nested(xml),
+        )
+
+
 class URLLink(TextElement['URLLink']):
-    def __init__(self, url: str, title: str) -> None:
+    def __init__(self, url: str, title: str, text: Optional[str]) -> None:
         self.url = url
         self.title = title
+        self.text = text
 
     @staticmethod
     def _from_xml(xml: Element):
@@ -351,6 +349,7 @@ class URLLink(TextElement['URLLink']):
         return URLLink(
             url=xml.attrib.pop('LinkURL'),
             title=xml.attrib.pop('LinkTitle'),
+            text=xml_text_pop(xml),
         )
 
     def __str__(self) -> str:
@@ -371,14 +370,16 @@ class OrderedList(TextElement['OrderedList']):
         return '\n'.join(' - {}'.format(element) for element in self.elements)
 
 
-class ContainerBlockElement(TextElement['ContainerBlockElement']):
-    def __init__(self, nested: Set[NestedType]) -> None:
-        self.nested = frozenset(nested)
+class ContainerBlockElement(MultiNestedElement['ContainerBlockElement']):
+    def __init__(self, nested: List[NestedType], text: Optional[str]) -> None:
+        super().__init__(nested=nested)
+        self.text = text
 
     @staticmethod
     def _from_xml(xml: Element):
         return ContainerBlockElement(
             nested=dispatch_nested_parsing(xml),
+            text=xml_text_pop(xml),
         )
 
     def __str__(self) -> str:
@@ -434,16 +435,16 @@ class Table(TextElement['Table']):
         return '{}\n{}'.format(self.title, '\n'.join(str(row) for row in self.rows))
 
 
-class ListItem(TextElement['ListItem']):
-    def __init__(self, text: str, nested: Set[NestedType]) -> None:
+class ListItem(MultiNestedElement['ListItem']):
+    def __init__(self, text: str, nested: List[NestedType]) -> None:
+        super().__init__(nested=nested)
         self.text = text
-        self.nested = frozenset(nested)
 
     @staticmethod
     def _from_xml(xml: Element):
         return ListItem(
-            text=xml.text,
-            nested=dispatch_nested_parsing(xml),
+            text=xml_text_pop(xml),
+            nested=ListItem._parse_nested(xml),
         )
 
     def __str__(self) -> str:
@@ -464,41 +465,23 @@ class UnorderedList(TextElement['UnorderedList']):
         return '\n'.join(' - {}'.format(item) for item in self.items)
 
 
-class Paragraph(TextElement['Paragraph']):
-    def __init__(self, content: List[Union[str, NestedType]], preformat: Optional[bool]) -> None:
-        self.content = content
+class Paragraph(MultiNestedElement['Paragraph']):
+    def __init__(self, nested: List[Union[str, NestedType]], preformat: Optional[bool]) -> None:
+        super().__init__(nested=nested)
         self.preformat = preformat
 
     @staticmethod
-    def __add_tail(res: List[Union[str, NestedType]], xml: Element) -> None:
-        tail = xml.tail
-        if tail is not None:
-            tail = ' '.join(tail.split())
-            if tail != '':
-                res.append(tail)
-
-    @staticmethod
     def _from_xml(xml: Element):
-        res = [xml_text_pop(xml)]
-        Paragraph.__add_tail(res, xml)
-
-        for child in xml:
-            xml.remove(child)
-            res.append(dispatch_single_nested(child))
-            Paragraph.__add_tail(res, child)
-            child.text = None
+        nested = Paragraph._parse_nested(xml)
 
         preformat = xml.attrib.pop('preformat', None) or xml.attrib.pop('preFormat', None)
         if preformat is not None:
             preformat = bool(preformat)
 
         return Paragraph(
-            content=[r for r in res if r is not None],
+            nested=nested,
             preformat=preformat,
         )
-
-    def __str__(self) -> str:
-        return ''.join(str(c) for c in self.content)
 
 
 class Test(XmlParse['Test']):
@@ -637,10 +620,11 @@ class SkillLevel(Enum):
 
 
 class Exploit(XmlParse['Exploit']):
-    def __init__(self, exploit_id: int, title: str, type: ExploitType, link: str, skill_level: SkillLevel) -> None:
+    def __init__(self, exploit_id: int, title: str, exploit_type: ExploitType, link: str,
+                 skill_level: SkillLevel) -> None:
         self.exploit_id = exploit_id
         self.title = title
-        self.type = type
+        self.type = exploit_type
         self.link = link
         self.skill_level = skill_level
 
@@ -649,7 +633,7 @@ class Exploit(XmlParse['Exploit']):
         return Exploit(
             exploit_id=xml.attrib.pop('id'),
             title=xml.attrib.pop('title'),
-            type=ExploitType(xml.attrib.pop('type')),
+            exploit_type=ExploitType(xml.attrib.pop('type')),
             link=xml.attrib.pop('link'),
             skill_level=SkillLevel(xml.attrib.pop('skillLevel')),
         )
@@ -692,7 +676,7 @@ class Reference(XmlParse['Reference']):
     def _from_xml(xml: Element):
         return Reference(
             source=ReferenceSource(xml.attrib.pop('source')),
-            text=xml.text,
+            text=xml_text_pop(xml),
         )
 
 
@@ -703,7 +687,17 @@ class Tag(XmlParse['Tag']):
     @staticmethod
     def _from_xml(xml: Element):
         return Tag(
-            text=xml.text,
+            text=xml_text_pop(xml),
+        )
+
+
+class Solution(MultiNestedElement['Solution']):
+    @staticmethod
+    def _from_xml(xml: Element):
+        assert xml.tag == 'solution'
+
+        return Solution(
+            nested=Solution._parse_nested(xml),
         )
 
 
@@ -731,6 +725,7 @@ class Vulnerability(XmlParse['Vulnerability']):
 
     @staticmethod
     def _from_xml(xml: Element):
+        assert xml.tag == 'vulnerability'
         return Vulnerability(
             vulnerability_id=xml.attrib.pop('id'),
             title=xml.attrib.pop('title'),
@@ -744,10 +739,10 @@ class Vulnerability(XmlParse['Vulnerability']):
             risk_score=float(xml.attrib.pop('riskScore')),
             malware=Malware.from_xml(xml_pop(xml, 'malware')),
             exploits={Exploit.from_xml(exploit) for exploit in xml_pop_children(xml, 'exploits')},
-            description=dispatch_single_nested(xml_pop(xml_pop(xml, 'description'), 'ContainerBlockElement')),
+            description=Description.from_xml(xml_pop(xml, 'description')),
             references={Reference.from_xml(reference) for reference in xml_pop_children(xml, 'references')},
             tags={Tag.from_xml(tag) for tag in xml_pop_children(xml, 'tags')},
-            solution=dispatch_single_nested(xml_pop(xml_pop(xml, 'solution'), 'ContainerBlockElement')),
+            solution=Solution.from_xml(xml_pop(xml, 'solution')),
         )
 
 
