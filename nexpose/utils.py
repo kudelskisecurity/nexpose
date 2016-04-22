@@ -1,6 +1,6 @@
 import datetime
 
-from typing import Iterable, TypeVar, Callable
+from typing import Iterable, TypeVar, Callable, Optional
 
 from nexpose.types import Element as ElementType
 
@@ -41,6 +41,12 @@ def xml_pop_children(xml: ElementType, key: str, *default: ElementType) -> Itera
         elem.remove(child)
 
     return children
+
+
+def xml_text_pop(xml: ElementType) -> Optional[str]:
+    text = xml.text
+    xml.text = None
+    return text
 
 
 def parse_date(raw: str) -> datetime.datetime:

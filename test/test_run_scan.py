@@ -1,11 +1,10 @@
 import time
-from lxml import etree
 
 from requests.exceptions import ConnectionError
 from typing import Iterator
 
 from nexpose.models.report import ReportConfig, ReportConfigFormat, ReportSummary, ReportConfigSummary, \
-    ReportSummaryStatus, NexposeReport
+    ReportSummaryStatus
 from nexpose.models.scan import ScanConfig, Status
 from nexpose.models.site import Site
 from test import TestBaseLogged
@@ -65,4 +64,5 @@ class TestRunScan(TestBaseLogged):
 
         self.assertIsNotNone(report_generated.report_uri)
 
-        self.assertIsNotNone(self.nexpose.extra.get_report_raw_xml_2(report_generated))
+        report_parsed = self.nexpose.extra.get_report_raw_xml_2(report_generated)
+        self.assertIsNotNone(report_parsed)

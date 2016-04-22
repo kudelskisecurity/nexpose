@@ -2,7 +2,7 @@ from typing import Iterable, Set
 
 from nexpose.models import XmlParse
 from nexpose.types import Element
-from nexpose.utils import xml_pop_children, xml_pop_list
+from nexpose.utils import xml_pop_list, xml_text_pop
 
 
 class Message(XmlParse['Message']):
@@ -13,7 +13,7 @@ class Message(XmlParse['Message']):
     def _from_xml(xml: Element) -> 'Message':
         assert xml.tag == 'message'
         return Message(
-            message=xml.text,
+            message=xml_text_pop(xml),
         )
 
 
@@ -21,6 +21,8 @@ class Stacktrace(XmlParse['Stacktrace']):
     @staticmethod
     def _from_xml(xml: Element):
         assert xml.tag == 'stacktrace'
+
+        return Stacktrace()
 
 
 class Exception(XmlParse['Exception']):
@@ -32,8 +34,8 @@ class Exception(XmlParse['Exception']):
     def _from_xml(xml: Element) -> 'Exception':
         assert xml.tag == 'Exception'
         return Exception(
-            messages={Message.from_xml(x) for x in xml_pop_children(xml, 'message')},
-            stacktraces={Exception.from_xml(stack) for stack in xml_pop_children(xml, 'stacktrace')},
+            messages={Message.from_xml(x) for x in xml_pop_list(xml, 'message')},
+            stacktraces={Stacktrace.from_xml(stack) for stack in xml_pop_list(xml, 'stacktrace')},
         )
 
 

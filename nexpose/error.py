@@ -1,15 +1,22 @@
 from nexpose.types import Element
 
 
-class WeirdXmlAnswerError(Exception):
+class WeirdXMLError(Exception):
     pass
 
 
-class StillElementInAttribError(WeirdXmlAnswerError):
+class NotFullyParsedError(WeirdXMLError):
     def __init__(self, element: Element) -> None:
         super().__init__(element, element.attrib, element.text)
 
 
-class StillSubElementError(WeirdXmlAnswerError):
-    def __init__(self, element: Element) -> None:
-        super().__init__(element, list(element))
+class AttribNotFullyParsedError(NotFullyParsedError):
+    pass
+
+
+class SubElementNotFullyParsedError(NotFullyParsedError):
+    pass
+
+
+class TextNotFullyParsedError(NotFullyParsedError):
+    pass

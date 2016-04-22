@@ -7,12 +7,12 @@ from uuid import uuid4
 from lxml.etree import SubElement
 from typing import Optional, Set, Union, List, TypeVar
 
-from nexpose.error import WeirdXmlAnswerError
+from nexpose.error import NotFullyParsedError, WeirdXMLError
 from nexpose.models import XmlParse, XmlFormat
 from nexpose.models.scan import Scan
 from nexpose.models.site import Site
 from nexpose.types import Element, IP, str_to_IP
-from nexpose.utils import xml_pop, parse_date, xml_pop_children, xml_pop_list
+from nexpose.utils import xml_pop, parse_date, xml_pop_children, xml_pop_list, xml_text_pop
 
 T = TypeVar('T')
 
@@ -346,7 +346,7 @@ class URLLink(TextElement['URLLink']):
     @staticmethod
     def _from_xml(xml: Element):
         if xml.attrib['LinkURL'] != xml.attrib.pop('href', xml.attrib['LinkURL']):
-            raise WeirdXmlAnswerError('{} != {}', xml.attrib['LinkURL'], xml.attrib['href'])
+            raise WeirdXMLError('{} != {}', xml.attrib['LinkURL'], xml.attrib['href'])
 
         return URLLink(
             url=xml.attrib.pop('LinkURL'),
@@ -479,20 +479,21 @@ class Paragraph(TextElement['Paragraph']):
 
     @staticmethod
     def _from_xml(xml: Element):
-        res = []
+        res = [xml_text_pop(xml)]
         Paragraph.__add_tail(res, xml)
 
         for child in xml:
             xml.remove(child)
             res.append(dispatch_single_nested(child))
-            Paragraph.__add_tail(res, xml)
+            Paragraph.__add_tail(res, child)
+            child.text = None
 
         preformat = xml.attrib.pop('preformat', None) or xml.attrib.pop('preFormat', None)
         if preformat is not None:
             preformat = bool(preformat)
 
         return Paragraph(
-            content=res,
+            content=[r for r in res if r is not None],
             preformat=preformat,
         )
 
