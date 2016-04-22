@@ -123,7 +123,7 @@ class ReportSummary(XmlParse['ReportSummary']):
         )
 
 
-class ReportConfigSummary(XmlParse):
+class ReportConfigSummary(XmlParse['ReportConfigSummary']):
     """
     lies:
      - `name` exist
@@ -491,7 +491,7 @@ class Test(XmlParse['Test']):
         )
 
 
-class Service(XmlParse):
+class Service(XmlParse['Service']):
     def __init__(self, name: str, fingerprints: Set[Fingerprint], configuration: Set[Config],
                  tests: Set[Test]) -> None:
         self.name = name
