@@ -1,16 +1,20 @@
+import abc
 import datetime
+from abc import abstractmethod
 from enum import Enum
 from uuid import uuid4
 
 from lxml.etree import SubElement
-from typing import Optional, Set, Union, List
+from typing import Optional, Set, Union, List, TypeVar
 
 from nexpose.error import WeirdXmlAnswerError
 from nexpose.models import XmlParse, XmlFormat
 from nexpose.models.scan import Scan
 from nexpose.models.site import Site
 from nexpose.types import Element, IP, str_to_IP
-from nexpose.utils import xml_pop, parse_date, xml_pop_children, xml_pop_list, xml_pop_apply
+from nexpose.utils import xml_pop, parse_date, xml_pop_children, xml_pop_list
+
+T = TypeVar('T')
 
 
 class ReportScope(Enum):
@@ -295,7 +299,13 @@ def dispatch_nested_parsing(xml: Element) -> Set[NestedType]:
     return frozenset(dispatch_single_nested(child) for child in children)
 
 
-class Description(XmlParse['Description']):
+class TextElement(XmlParse[T], metaclass=abc.ABCMeta):
+    @abstractmethod
+    def __str__(self) -> str:
+        pass
+
+
+class Description(TextElement['Description']):
     def __init__(self, nested: List[NestedType]) -> None:
         self.nested = nested
 
@@ -324,8 +334,11 @@ class Description(XmlParse['Description']):
             nested=res,
         )
 
+    def __str__(self) -> str:
+        return ''.join(str(nested) for nested in self.nested)
 
-class URLLink(XmlParse['URLLink']):
+
+class URLLink(TextElement['URLLink']):
     def __init__(self, url: str, title: str) -> None:
         self.url = url
         self.title = title
@@ -340,8 +353,11 @@ class URLLink(XmlParse['URLLink']):
             title=xml.attrib.pop('LinkTitle'),
         )
 
+    def __str__(self) -> str:
+        return '[{}]({})'.format(self.title, self.url)
 
-class OrderedList(XmlParse['OrderedList']):
+
+class OrderedList(TextElement['OrderedList']):
     def __init__(self, elements: List[NestedType]) -> None:
         self.elements = elements
 
@@ -351,8 +367,11 @@ class OrderedList(XmlParse['OrderedList']):
             elements=[ListItem.from_xml(item) for item in xml_pop_list(xml, 'ListItem')],
         )
 
+    def __str__(self) -> str:
+        return '\n'.join(' - {}'.format(element) for element in self.elements)
 
-class ContainerBlockElement(XmlParse['ContainerBlockElement']):
+
+class ContainerBlockElement(TextElement['ContainerBlockElement']):
     def __init__(self, nested: Set[NestedType]) -> None:
         self.nested = frozenset(nested)
 
@@ -362,8 +381,11 @@ class ContainerBlockElement(XmlParse['ContainerBlockElement']):
             nested=dispatch_nested_parsing(xml),
         )
 
+    def __str__(self) -> str:
+        return '\n'.join(str(nested) for nested in self.nested)
 
-class TableCell(XmlParse['TableCell']):
+
+class TableCell(TextElement['TableCell']):
     def __init__(self, content: 'Paragraph') -> None:
         self.content = content
 
@@ -374,8 +396,11 @@ class TableCell(XmlParse['TableCell']):
             content=Paragraph.from_xml(xml_pop(xml, 'Paragraph')),
         )
 
+    def __str__(self) -> str:
+        return '{}'.format(self.content)
 
-class TableRow(XmlParse['TableRow']):
+
+class TableRow(TextElement['TableRow']):
     def __init__(self, title: str, cells: List[TableCell]) -> None:
         self.title = title
         self.cells = cells
@@ -388,8 +413,11 @@ class TableRow(XmlParse['TableRow']):
             cells=[TableCell.from_xml(cell) for cell in xml_pop_list(xml, 'TableCell')],
         )
 
+    def __str__(self) -> str:
+        return '{}\t{}'.format(self.title, '\t'.join(str(cell) for cell in self.cells))
 
-class Table(XmlParse['Table']):
+
+class Table(TextElement['Table']):
     def __init__(self, title: str, rows: List[TableRow]) -> None:
         self.title = title
         self.rows = rows
@@ -402,8 +430,11 @@ class Table(XmlParse['Table']):
             rows=[TableRow.from_xml(row) for row in xml_pop_list(xml, 'TableRow')],
         )
 
+    def __str__(self) -> str:
+        return '{}\n{}'.format(self.title, '\n'.join(str(row) for row in self.rows))
 
-class ListItem(XmlParse['ListItem']):
+
+class ListItem(TextElement['ListItem']):
     def __init__(self, text: str, nested: Set[NestedType]) -> None:
         self.text = text
         self.nested = frozenset(nested)
@@ -415,8 +446,11 @@ class ListItem(XmlParse['ListItem']):
             nested=dispatch_nested_parsing(xml),
         )
 
+    def __str__(self) -> str:
+        return '{}\n{}'.format(self.text, '\n'.join(str(nested) for nested in self.nested))
 
-class UnorderedList(XmlParse['UnorderedList']):
+
+class UnorderedList(TextElement['UnorderedList']):
     def __init__(self, items: Set[ListItem]) -> None:
         self.items = frozenset(items)
 
@@ -426,8 +460,11 @@ class UnorderedList(XmlParse['UnorderedList']):
             items={ListItem.from_xml(item) for item in xml_pop_list(xml, 'ListItem')}
         )
 
+    def __str__(self) -> str:
+        return '\n'.join(' - {}'.format(item) for item in self.items)
 
-class Paragraph(XmlParse['Paragraph']):
+
+class Paragraph(TextElement['Paragraph']):
     def __init__(self, content: List[Union[str, NestedType]], preformat: Optional[bool]) -> None:
         self.content = content
         self.preformat = preformat
@@ -458,6 +495,9 @@ class Paragraph(XmlParse['Paragraph']):
             content=res,
             preformat=preformat,
         )
+
+    def __str__(self) -> str:
+        return ''.join(str(c) for c in self.content)
 
 
 class Test(XmlParse['Test']):
