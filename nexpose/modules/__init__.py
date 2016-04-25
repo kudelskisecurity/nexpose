@@ -9,6 +9,7 @@ from typing import Optional, Mapping, Tuple
 from nexpose.models.failure import Failure
 from nexpose.networkerror import NetworkError
 from nexpose.types import Element
+from nexpose.utils import return_none
 
 
 class ModuleBase:
@@ -17,7 +18,7 @@ class ModuleBase:
         self.host = host
         self.port = port
 
-        self.sessions_id = defaultdict(lambda: None)  # type: MutableMapping[Tuple[int, int], Optional[str]]
+        self.sessions_id = defaultdict(return_none)  # type: MutableMapping[Tuple[int, int], Optional[str]]
         if sessions_id is not None:
             self.sessions_id.update(sessions_id)
 

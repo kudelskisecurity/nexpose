@@ -58,3 +58,6 @@ def xml_tail_pop(xml: ElementType) -> Optional[str]:
 
 def parse_date(raw: str) -> datetime.datetime:
     return datetime.datetime.strptime(raw, '%Y%m%dT%H%M%S%f')
+
+def return_none():
+    return None
