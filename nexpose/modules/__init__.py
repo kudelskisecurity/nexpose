@@ -1,8 +1,10 @@
 import logging
 from collections import defaultdict
+from http.client import BadStatusLine
 
 import requests
 from lxml import etree
+from requests.packages.urllib3.exceptions import ProtocolError
 from typing import MutableMapping
 from typing import Optional, Mapping, Tuple
 
@@ -41,7 +43,20 @@ class ModuleBase:
                                  encoding='UTF-8')
 
         session = self.__get_session()
-        ans = session.post(url=url, data=req_raw, verify=False)
+        while True:
+            try:
+                ans = session.post(url=url, data=req_raw, verify=False)
+                break
+            except requests.exceptions.ConnectionError as e:
+                match = len(e.args) == 1
+                match = match and isinstance(e.args[0], ProtocolError)
+                match = match and len(e.args[0].args) == 2
+                match = match and e.args[0].args[0] == 'Connection aborted.'
+                match = match and isinstance(e.args[0].args[1], BadStatusLine)
+
+                if not match:
+                    raise
+
         ans_xml = etree.fromstring(ans.content)
 
         self.__check_failure(xml=ans_xml, api_version=api_version)

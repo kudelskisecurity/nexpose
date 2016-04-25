@@ -204,6 +204,7 @@ class Fingerprint(XmlParse['Fingerprint']):
 class DeviceClass(Enum):
     general = 'General'
     wap = 'WAP'
+    storage = 'Storage'
 
 
 class OS(Fingerprint):
