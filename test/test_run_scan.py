@@ -66,3 +66,5 @@ class TestRunScan(TestBaseLogged):
 
         report_parsed = self.nexpose.extra.get_report_raw_xml_2(report_generated)
         self.assertIsNotNone(report_parsed)
+
+        frozenset([report_parsed])  # ensure that everything is hashable

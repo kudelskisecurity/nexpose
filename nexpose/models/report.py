@@ -5,7 +5,7 @@ from enum import Enum
 from uuid import uuid4
 
 from lxml.etree import SubElement
-from typing import Callable, Mapping, Optional, Set, Union, List, TypeVar, Generic
+from typing import Callable, Mapping, Optional, Set, Union, List, TypeVar, Generic, Tuple
 
 from nexpose.error import WeirdXMLError
 from nexpose.models import XmlParse, XmlFormat
@@ -292,12 +292,12 @@ def dispatch_single_nested(xml: Element) -> NestedType:
     return nested[xml.tag](xml)
 
 
-def dispatch_nested_parsing(xml: Element) -> List[NestedType]:
+def dispatch_nested_parsing(xml: Element) -> Tuple[NestedType, ...]:
     children = list(xml)
     for child in children:
         xml.remove(child)
 
-    return [dispatch_single_nested(child) for child in children]
+    return tuple(dispatch_single_nested(child) for child in children)
 
 
 class TextElement(XmlParse[T], Generic[T], metaclass=abc.ABCMeta):
@@ -307,11 +307,11 @@ class TextElement(XmlParse[T], Generic[T], metaclass=abc.ABCMeta):
 
 
 class MultiNestedElement(TextElement[T], Generic[T], metaclass=abc.ABCMeta):
-    def __init__(self, nested: List[Union[str, NestedType]]) -> None:
+    def __init__(self, nested: Tuple[Union[str, NestedType], ...]) -> None:
         self.nested = nested
 
     @staticmethod
-    def _parse_nested(xml: Element) -> List[Union[str, NestedType]]:
+    def _parse_nested(xml: Element) -> Tuple[Union[str, NestedType], ...]:
         ret = [xml_text_pop(xml), xml_tail_pop(xml)]  # type: List[Union[str, NestedType]]
 
         for child in xml:
@@ -320,7 +320,7 @@ class MultiNestedElement(TextElement[T], Generic[T], metaclass=abc.ABCMeta):
             ret.append(dispatch_single_nested(child))
             ret.append(tail)
 
-        return [r for r in ret if r is not None]
+        return tuple(r for r in ret if r is not None)
 
     def __str__(self) -> str:
         return ''.join(str(nested) for nested in self.nested)
@@ -358,13 +358,13 @@ class URLLink(TextElement['URLLink']):
 
 
 class OrderedList(TextElement['OrderedList']):
-    def __init__(self, elements: List[NestedType]) -> None:
+    def __init__(self, elements: Tuple[NestedType, ...]) -> None:
         self.elements = elements
 
     @staticmethod
     def _from_xml(xml: Element):
         return OrderedList(
-            elements=[ListItem.from_xml(item) for item in xml_pop_list(xml, 'ListItem')],
+            elements=tuple(ListItem.from_xml(item) for item in xml_pop_list(xml, 'ListItem')),
         )
 
     def __str__(self) -> str:
@@ -372,7 +372,7 @@ class OrderedList(TextElement['OrderedList']):
 
 
 class ContainerBlockElement(MultiNestedElement['ContainerBlockElement']):
-    def __init__(self, nested: List[NestedType], text: Optional[str]) -> None:
+    def __init__(self, nested: Tuple[NestedType, ...], text: Optional[str]) -> None:
         super().__init__(nested=nested)
         self.text = text
 
@@ -403,7 +403,7 @@ class TableCell(TextElement['TableCell']):
 
 
 class TableRow(TextElement['TableRow']):
-    def __init__(self, title: str, cells: List[TableCell]) -> None:
+    def __init__(self, title: str, cells: Tuple[TableCell, ...]) -> None:
         self.title = title
         self.cells = cells
 
@@ -412,7 +412,7 @@ class TableRow(TextElement['TableRow']):
         assert xml.tag == 'TableRow'
         return TableRow(
             title=xml.attrib.pop('RowTitle'),
-            cells=[TableCell.from_xml(cell) for cell in xml_pop_list(xml, 'TableCell')],
+            cells=tuple(TableCell.from_xml(cell) for cell in xml_pop_list(xml, 'TableCell')),
         )
 
     def __str__(self) -> str:
@@ -420,7 +420,7 @@ class TableRow(TextElement['TableRow']):
 
 
 class Table(TextElement['Table']):
-    def __init__(self, title: str, rows: List[TableRow]) -> None:
+    def __init__(self, title: str, rows: Tuple[TableRow, ...]) -> None:
         self.title = title
         self.rows = rows
 
@@ -429,7 +429,7 @@ class Table(TextElement['Table']):
         assert xml.tag == 'Table'
         return Table(
             title=xml.attrib.pop('TableTitle'),
-            rows=[TableRow.from_xml(row) for row in xml_pop_list(xml, 'TableRow')],
+            rows=tuple(TableRow.from_xml(row) for row in xml_pop_list(xml, 'TableRow')),
         )
 
     def __str__(self) -> str:
@@ -437,7 +437,7 @@ class Table(TextElement['Table']):
 
 
 class ListItem(MultiNestedElement['ListItem']):
-    def __init__(self, text: str, nested: List[NestedType]) -> None:
+    def __init__(self, text: str, nested: Tuple[NestedType, ...]) -> None:
         super().__init__(nested=nested)
         self.text = text
 
@@ -467,7 +467,7 @@ class UnorderedList(TextElement['UnorderedList']):
 
 
 class Paragraph(MultiNestedElement['Paragraph']):
-    def __init__(self, nested: List[Union[str, NestedType]], preformat: Optional[bool]) -> None:
+    def __init__(self, nested: Tuple[Union[str, NestedType], ...], preformat: Optional[bool]) -> None:
         super().__init__(nested=nested)
         self.preformat = preformat
 
